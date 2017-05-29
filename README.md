@@ -1,2 +1,2 @@
-# scrapend
-An API REST to practice: JAVA EE, Spring, JWT, Swagger, MongoDB and Jongo.
+# drimtim-scrapend
+Scrapend Backend

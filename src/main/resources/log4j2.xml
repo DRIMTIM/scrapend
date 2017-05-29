@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration monitorinterval="30" status="INFO" strict="true">
+    <properties>
+        <property name="filename">/var/log/tomcat8/scrapend.log</property>
+    </properties>
+    <appenders>
+        <appender type="console" name="console">
+            <layout type="patternlayout" pattern="%d %p [%t] %m%n"/>
+        </appender>
+        <appender type="console" name="flow">
+            <layout type="patternlayout" pattern="%c{1}.%m %m %ex%n"/>
+        </appender>
+        <appender type="file" name="file" filename="${filename}">
+            <layout type="patternlayout" pattern="%d %p %c{1.} [%t] %m%n"/>
+        </appender>
+    </appenders>
+    <loggers>
+        <logger name="com.drimtim.scrapend.managers" level="DEBUG" additivity="false">
+            <appenderref ref="console"/>
+            <appenderref ref="file"/>
+        </logger>
+        <root level="INFO">
+            <appenderref ref="file"/>
+            <appenderref ref="console"/>
+            <!-- use flow to trace down exact method sending the msg -->
+            <!-- <appenderref ref="flow" /> -->
+        </root>
+    </loggers>
+</configuration>
