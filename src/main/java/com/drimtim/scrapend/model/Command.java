@@ -23,6 +23,7 @@ public class Command extends AbstractModel {
     private Long waitTimeout;
     private Status status;
     private CommandResult result;
+    private boolean async;
 
     public Command() {}
 
@@ -103,6 +104,17 @@ public class Command extends AbstractModel {
     }
     public void setResult(CommandResult result) {
         this.result = result;
+    }
+
+    @ApiModelProperty(
+            value = "Tells the api to execute async command.",
+            dataType = "Boolean")
+
+    public boolean isAsync() {
+        return async;
+    }
+    public void setAsync(boolean async) {
+        this.async = async;
     }
 
 }

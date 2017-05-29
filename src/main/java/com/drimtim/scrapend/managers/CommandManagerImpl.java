@@ -47,7 +47,15 @@ public class CommandManagerImpl extends AbstractManager implements CommandManage
     }
 
     @Async
-    public void waitCommand(Command command, Process process) throws Exception {
+    public void waitCommandAsync(Command command, Process process) throws Exception {
+        waitCommand(command, process);
+    }
+
+    public void waitCommandSync(Command command, Process process) throws Exception {
+        waitCommand(command, process);
+    }
+
+    private void waitCommand(Command command, Process process) throws Exception {
         process.waitFor(command.getWaitTimeout(), TimeUnit.SECONDS);
         command = commandRepository.findOne(command.getId());
         CommandResult commandResult = new CommandResult();

@@ -9,7 +9,8 @@ import com.drimtim.scrapend.response.Response;
  */
 public interface CommandManager {
     Process callCommand(Command command) throws Exception;
-    void waitCommand(Command command, Process process) throws Exception;
+    void waitCommandAsync(Command command, Process process) throws Exception;
+    void waitCommandSync(Command command, Process process) throws Exception;
     Response killCommand(String commandId) throws Exception;
     Response getAllCommands(Status commandStatus);
 }

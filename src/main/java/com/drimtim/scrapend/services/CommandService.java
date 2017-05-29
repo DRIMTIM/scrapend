@@ -20,7 +20,11 @@ public class CommandService extends AbstractService {
     public Response executeCommand(Command command) {
         try {
             Process process = commandManager.callCommand(command);
-            commandManager.waitCommand(command, process);
+            if (command.isAsync()) {
+                commandManager.waitCommandAsync(command, process);
+            } else {
+                commandManager.waitCommandSync(command, process);
+            }
             return manageSuccess(command);
         } catch (Exception e) {
             return manageException(e);
