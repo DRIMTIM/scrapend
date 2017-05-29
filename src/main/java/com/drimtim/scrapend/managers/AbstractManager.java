@@ -1,6 +1,6 @@
 package com.drimtim.scrapend.managers;
 
-import com.drimtim.scrapend.repositories.CommandResultRepository;
+import com.drimtim.scrapend.repositories.CommandRepository;
 import com.drimtim.scrapend.response.Response;
 import com.drimtim.scrapend.utils.ExceptionUtils;
 import org.apache.logging.log4j.Logger;
@@ -9,14 +9,14 @@ import org.springframework.beans.factory.annotation.Value;
 
 public abstract class AbstractManager {
 
-    protected final CommandResultRepository commandResultRepository;
+    protected final CommandRepository commandRepository;
 
     @Value("${configuration.exceptionControllerAdvice.showStackTrace:false}")
     private Boolean showStackTrace;
 
     @Autowired
-    public AbstractManager(CommandResultRepository commandResultRepository) {
-        this.commandResultRepository = commandResultRepository;
+    public AbstractManager(CommandRepository commandRepository) {
+        this.commandRepository = commandRepository;
     }
 
     protected Response manageException(Exception exception) {

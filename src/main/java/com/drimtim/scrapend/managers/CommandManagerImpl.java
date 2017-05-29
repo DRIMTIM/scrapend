@@ -1,16 +1,17 @@
 package com.drimtim.scrapend.managers;
 
-import com.drimtim.scrapend.annotations.Benchmark;
 import com.drimtim.scrapend.constants.GlobalConstants;
+import com.drimtim.scrapend.enums.Status;
 import com.drimtim.scrapend.interfaces.CommandManager;
 import com.drimtim.scrapend.model.Command;
 import com.drimtim.scrapend.model.CommandResult;
-import com.drimtim.scrapend.repositories.CommandResultRepository;
+import com.drimtim.scrapend.repositories.CommandRepository;
 import com.drimtim.scrapend.response.Response;
 import com.drimtim.scrapend.utils.CommandUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -19,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Created by jonathan on 24/05/17.
@@ -29,25 +31,58 @@ public class CommandManagerImpl extends AbstractManager implements CommandManage
     private static final Logger LOGGER = LogManager.getLogger(CommandManagerImpl.class);
 
     @Autowired
-    public CommandManagerImpl(CommandResultRepository commandResultRepository) {
+    public CommandManagerImpl(CommandRepository commandResultRepository) {
         super(commandResultRepository);
     }
 
-    @Benchmark
     @Override
-    public Response executeTestCommand(Command command) {
-        try {
-            String stringCommand = command.isUseDefaultCommand() ? CommandUtils.getDefaultCommand(command.getSpiderName()) : command.getCustomCommand();
-            Process process = Runtime.getRuntime().exec(stringCommand);
-            process.waitFor(command.getWaitTimeout(), TimeUnit.SECONDS);
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+    public Process callCommand(Command command) throws Exception {
+        String stringCommand = command.isUseDefaultCommand() ? CommandUtils.getDefaultCommand(command.getSpiderName()) : command.getCustomCommand();
+        Process process = Runtime.getRuntime().exec(stringCommand);
+        command.setStatus(Status.RUNNING);
+        String pid = CommandUtils.getPidFromProcessRunning(process).toString();
+        command.setId(pid);
+        commandRepository.save(command);
+        return process;
+    }
+
+    @Async
+    public void waitCommand(Command command, Process process) throws Exception {
+        process.waitFor(command.getWaitTimeout(), TimeUnit.SECONDS);
+        command = commandRepository.findOne(command.getId());
+        CommandResult commandResult = new CommandResult();
+        if (process.getErrorStream() != null && process.getErrorStream().available() > 0) {
+            command.setStatus(Status.ERROR);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
             String line;
-            CommandResult commandResult = new CommandResult(command);
             while ((line = reader.readLine()) != null) {
                 commandResult.setResultString(commandResult.getResultString().concat(line + GlobalConstants.END_LINE));
             }
-            commandResultRepository.save(commandResult);
-            return manageSuccess(commandResult);
+        } else {
+            if (command.getStatus().equals(Status.RUNNING)) {
+                command.setStatus(Status.DONE);
+            }
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                commandResult.setResultString(commandResult.getResultString().concat(line + GlobalConstants.END_LINE));
+            }
+        }
+        command.setResult(commandResult);
+        commandRepository.save(command);
+    }
+
+    @Override
+    public Response killCommand(String commandId) throws Exception {
+        try {
+            Command command = commandRepository.findOne(commandId);
+            if (command.getStatus().equals(Status.RUNNING)) {
+                Process process = Runtime.getRuntime().exec("kill -9 " + commandId);
+                process.waitFor();
+                command.setStatus(Status.KILLED);
+                commandRepository.save(command);
+            }
+            return manageSuccess(command);
         } catch (Exception e) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(e);
@@ -57,11 +92,14 @@ public class CommandManagerImpl extends AbstractManager implements CommandManage
     }
 
     @Override
-    public Response getAllCommands() {
+    public Response getAllCommands(Status commandStatus) {
         try {
             Map<String, Object> commandsMap = new HashMap<>();
-            List<CommandResult> commands = commandResultRepository.findAll();
-            commandsMap.put("commands", commands);
+            List<Command> commands = commandRepository.findAll();
+            if (commands != null && !commands.isEmpty()) {
+                commands = commands.stream().filter(command -> command.getStatus().equals(commandStatus)).collect(Collectors.toList());
+            }
+            commandsMap.put("commandList", commands);
             return manageSuccess(commandsMap);
         } catch (Exception e) {
             if (LOGGER.isDebugEnabled()) {

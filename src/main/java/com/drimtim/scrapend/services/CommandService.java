@@ -1,5 +1,6 @@
 package com.drimtim.scrapend.services;
 
+import com.drimtim.scrapend.enums.Status;
 import com.drimtim.scrapend.interfaces.CommandManager;
 import com.drimtim.scrapend.model.Command;
 import com.drimtim.scrapend.response.Response;
@@ -18,15 +19,25 @@ public class CommandService extends AbstractService {
 
     public Response executeCommand(Command command) {
         try {
-            return commandManager.executeTestCommand(command);
+            Process process = commandManager.callCommand(command);
+            commandManager.waitCommand(command, process);
+            return manageSuccess(command);
         } catch (Exception e) {
             return manageException(e);
         }
     }
 
-    public Response getAllCommands() {
+    public Response getAllCommands(Status commandStatus) {
         try {
-            return commandManager.getAllCommands();
+            return commandManager.getAllCommands(commandStatus);
+        } catch (Exception e) {
+            return manageException(e);
+        }
+    }
+
+    public Response killCommand(String commandId) {
+        try {
+            return commandManager.killCommand(commandId);
         } catch (Exception e) {
             return manageException(e);
         }
