@@ -1,2 +1,0 @@
-# drimtim-scrapend
-Scrapend Backend
