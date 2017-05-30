@@ -23,7 +23,7 @@ public class CommandService extends AbstractService {
             if (command.isAsync()) {
                 commandManager.waitCommandAsync(command, process);
             } else {
-                commandManager.waitCommandSync(command, process);
+                command = commandManager.waitCommandSync(command, process);
             }
             return manageSuccess(command);
         } catch (Exception e) {

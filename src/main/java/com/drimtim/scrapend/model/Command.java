@@ -30,7 +30,7 @@ public class Command extends AbstractModel {
     @ApiModelProperty(
             value = "The spider name command to use.",
             dataType = "String",
-            example = "Spider Man!!")
+            example = "dgi-test-scrap-default")
     public String getSpiderName() {
         return spiderName;
     }

@@ -14,8 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,12 +38,21 @@ public class CommandManagerImpl extends AbstractManager implements CommandManage
     @Override
     public Process callCommand(Command command) throws Exception {
         String stringCommand = command.isUseDefaultCommand() ? CommandUtils.getDefaultCommand(command.getSpiderName()) : command.getCustomCommand();
-        Process process = Runtime.getRuntime().exec(stringCommand);
-        command.setStatus(Status.RUNNING);
-        String pid = CommandUtils.getPidFromProcessRunning(process).toString();
-        command.setId(pid);
-        commandRepository.save(command);
-        return process;
+        File tempScript = createTempScript(stringCommand);
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder("bash", tempScript.toString());
+            processBuilder.inheritIO();
+            Process process = processBuilder.start();
+            LOGGER.info("Calling command: " + stringCommand);
+            command.setStatus(Status.RUNNING);
+            String pid = CommandUtils.getPidFromProcessRunning(process).toString();
+            LOGGER.info("Command pid: " + pid);
+            command.setId(pid);
+            commandRepository.save(command);
+            return process;
+        } finally {
+            tempScript.delete();
+        }
     }
 
     @Async
@@ -51,33 +60,65 @@ public class CommandManagerImpl extends AbstractManager implements CommandManage
         waitCommand(command, process);
     }
 
-    public void waitCommandSync(Command command, Process process) throws Exception {
+    public Command waitCommandSync(Command command, Process process) throws Exception {
         waitCommand(command, process);
+        return commandRepository.findOne(command.getId());
     }
 
     private void waitCommand(Command command, Process process) throws Exception {
+        LOGGER.info("Wait for the command to execute for " + command.getWaitTimeout() + " seconds.");
         process.waitFor(command.getWaitTimeout(), TimeUnit.SECONDS);
+        LOGGER.info("End wait, now saving the result");
         command = commandRepository.findOne(command.getId());
         CommandResult commandResult = new CommandResult();
         if (process.getErrorStream() != null && process.getErrorStream().available() > 0) {
             command.setStatus(Status.ERROR);
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                commandResult.setResultString(commandResult.getResultString().concat(line + GlobalConstants.END_LINE));
+            try {
+                commandResult.setResultLines((readLines(process.getErrorStream())));
+            } catch (Exception e) {
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug(e);
+                }
+                command.setStatus(Status.ERROR);
+                commandResult.getResultLines().add(e.getMessage());
             }
         } else {
             if (command.getStatus().equals(Status.RUNNING)) {
                 command.setStatus(Status.DONE);
             }
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                commandResult.setResultString(commandResult.getResultString().concat(line + GlobalConstants.END_LINE));
+            try {
+                commandResult.setResultLines((readLines(process.getInputStream())));
+            } catch (Exception e) {
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug(e);
+                }
+                command.setStatus(Status.ERROR);
+                commandResult.getResultLines().add(e.getMessage());
             }
         }
         command.setResult(commandResult);
         commandRepository.save(command);
+    }
+
+    private List<String> readLines(InputStream inputStream) throws Exception {
+        List<String> lines = new ArrayList<>();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        while (reader.ready()) {
+            String line = reader.readLine();
+            if (line != null) {
+                lines.add(line);
+            }
+        }
+        return lines;
+    }
+
+    private File createTempScript(String commandString) throws IOException {
+        File tempScript = File.createTempFile("script", null);
+        Writer streamWriter = new OutputStreamWriter(new FileOutputStream(tempScript));
+        PrintWriter printWriter = new PrintWriter(streamWriter);
+        printWriter.println(commandString);
+        printWriter.close();
+        return tempScript;
     }
 
     @Override
@@ -86,6 +127,7 @@ public class CommandManagerImpl extends AbstractManager implements CommandManage
             Command command = commandRepository.findOne(commandId);
             if (command.getStatus().equals(Status.RUNNING)) {
                 Process process = Runtime.getRuntime().exec("kill -9 " + commandId);
+                LOGGER.info("Killing process with pid " + commandId);
                 process.waitFor();
                 command.setStatus(Status.KILLED);
                 commandRepository.save(command);
